@@ -246,3 +246,7 @@ Authors and Contributors
 
   Many thanks to all those who have submitted bug reports and suggestions for
   further enhancements.
+
+Jenkins Test
+========================
+Test if Jenkins can detect GitHub push.
