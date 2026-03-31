@@ -20,7 +20,7 @@ pipeline {
         // run sonarqube test
         stage('Run Sonarqube') {
             steps {
-              withSonarQubeEnv(credentialsId: 'sonarqube', installationName: 'Sonarqube') {
+              withSonarQubeEnv(credentialsId: 'sonarqube-token', installationName: 'Sonarqube') {
                 sh "${SCANNER_HOME}/bin/sonar-scanner"
               }
             }
