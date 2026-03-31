@@ -11,6 +11,10 @@ pipeline {
                   image: google/cloud-sdk:slim
                   command: ['cat']
                   tty: true
+                - name: sonar
+                  image: sonarsource/sonar-scanner-cli:latest
+                  command: ['cat']
+                  tty: true
             """
         }
     }
@@ -33,21 +37,26 @@ pipeline {
         // run sonarqube test
         stage('Run Sonarqube') {
             steps {
-              withSonarQubeEnv(credentialsId: 'sonarqube-token', installationName: 'Sonarqube') {
-                sh "${SCANNER_HOME}/bin/sonar-scanner"
-              }
+                container('sonar'){
+                    withSonarQubeEnv(credentialsId: 'sonarqube-token', installationName: 'Sonarqube') {
+                        // sh "${SCANNER_HOME}/bin/sonar-scanner"
+                        sh 'sonar-scanner'
+                    }
+                }
             }
         }
 
         stage("Quality Gate") {
             steps {
-                timeout(time: 10, unit: 'MINUTES') {
-                    script {
-                        def qg = waitForQualityGate()
-                        if (qg.status != 'OK') {
-                            error "Pipeline aborted due to quality gate failure: ${qg.status}"
-                        } else {
-                            echo "SonarQube analysis passed (Status: ${qg.status}), continue to run Hadoop job"
+                container('sonar'){
+                    timeout(time: 10, unit: 'MINUTES') {
+                        script {
+                            def qg = waitForQualityGate()
+                            if (qg.status != 'OK') {
+                                error "Pipeline aborted due to quality gate failure: ${qg.status}"
+                            } else {
+                                echo "SonarQube analysis passed (Status: ${qg.status}), continue to run Hadoop job"
+                            }
                         }
                     }
                 }
@@ -56,6 +65,7 @@ pipeline {
 
         stage('Run Hadoop Job') {
             steps {
+                container('gcloud') {
                 script {
                     sh '''
                     gsutil rm -r ${STAGING_BUCKET}/input/ || true
@@ -107,6 +117,7 @@ pipeline {
                       -input ${STAGING_BUCKET}/input/* \
                       -output ${STAGING_BUCKET}/output/
                     '''
+                }
                 }
             }
         }
