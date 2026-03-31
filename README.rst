@@ -249,4 +249,4 @@ Authors and Contributors
 
 Jenkins Test
 ========================
-Test if Jenkins can detect GitHub push.
+Test if Jenkins can detect GitHub push (again)!
