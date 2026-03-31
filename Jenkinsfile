@@ -1,5 +1,10 @@
 pipeline {
-    agent any
+    agent {
+        docker {
+            image 'google/cloud-sdk:slim'
+            args '-u root:root'
+        }
+    }
     triggers {
         githubPush()
     }
