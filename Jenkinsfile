@@ -1,8 +1,17 @@
 pipeline {
     agent {
-        docker {
-            image 'google/cloud-sdk:slim'
-            args '-u root:root'
+        kubernetes {
+            defaultContainer 'gcloud'
+            yaml """
+            apiVersion: v1
+            kind: Pod
+            spec:
+              containers:
+                - name: gcloud
+                  image: google/cloud-sdk:slim
+                  command: ['cat']
+                  tty: true
+            """
         }
     }
     triggers {
