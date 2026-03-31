@@ -249,4 +249,4 @@ Authors and Contributors
 
 Jenkins Test
 ========================
-Test if Jenkins can detect GitHub push (again and again). It's not working with Sonarqube, why?
+Test if Jenkins can detect GitHub push (again and again).
