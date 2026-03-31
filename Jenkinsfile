@@ -5,9 +5,9 @@ pipeline {
     }
     environment {
         PROJECT_ID = "cmu-class-485820"
-        CLUSTER_NAME = "my-cluster"
+        CLUSTER_NAME = "devops-mayavi"
         REGION = "us-central1-b"
-        STAGING_BUCKET = "gs://dataproc-staging-us-central1-935210240050-dudfa3xz"
+        STAGING_BUCKET = "gs://mayavi-staging-bucket"
         
         SCANNER_HOME = tool 'SonarScanner'
     }
@@ -68,14 +68,14 @@ pipeline {
                             total_lines=\$((total_lines + count))
                         else
                             if [ -n "\$current_file" ]; then
-                                echo "▪ \$current_file: \$total_lines"
+                                echo "\$current_file: \$total_lines"
                             fi
                             current_file="\$file"
                             total_lines=\$count
                         fi
                     done
                     if [ -n "\$current_file" ]; then
-                        echo "▪ \$current_file: \$total_lines"
+                        echo "\$current_file: \$total_lines"
                     fi
                     EOF
                     chmod +x mapper.sh reducer.sh
