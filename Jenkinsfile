@@ -1,14 +1,10 @@
 pipeline {
     agent any
-    triggers {
-        githubPush()
-    }
     environment {
         PROJECT_ID = "cmu-class-485820"
         CLUSTER_NAME = "devops-mayavi"
         REGION = "us-central1-b"
-        STAGING_BUCKET = "gs://mayavi-staging-bucket"
-        
+        STAGING_BUCKET = "gs://mayavi-staging-bucket" 
         SCANNER_HOME = tool 'SonarScanner'
     }
     stages {
