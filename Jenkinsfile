@@ -69,8 +69,9 @@ pipeline {
                 withCredentials([file(credentialsId: 'gcp-key', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
                     script {
                         writeFile file: 'mapper.sh', text: '''#!/bin/sh
-FILENAME=$(basename "$map_input_file")
-LINE_COUNT=$(wc -l | awk '{print $1}')
+INPUT_FILE="${map_input_file:-${mapreduce_map_input_file:-unknown}}"
+FILENAME="${INPUT_FILE##*/}"
+LINE_COUNT=$(awk 'END{print NR+0}')
 printf '"%s"\t%s\n' "$FILENAME" "$LINE_COUNT"
                         '''
                         writeFile file: 'reducer.sh', text: '''#!/bin/sh
@@ -106,6 +107,7 @@ fi
                     
                     cd ../
                     ls -l mapper.sh reducer.sh
+                    cat mapper.sh
                     sed -i 's/\r$//' mapper.sh reducer.sh
                     chmod +x mapper.sh reducer.sh
 
@@ -118,8 +120,8 @@ fi
                       --files=mapper.sh,reducer.sh \
                       -- -D mapreduce.input.fileinputformat.input.dir.recursive=true \
                       -D mapreduce.job.reduces=1 \
-                                            -mapper "/bin/sh mapper.sh" \
-                                            -reducer "/bin/sh reducer.sh" \
+                      -mapper "sh ./mapper.sh" \
+                      -reducer "sh ./reducer.sh" \
                       -input ${STAGING_BUCKET}/input/* \
                       -output ${STAGING_BUCKET}/output/
                     '''
