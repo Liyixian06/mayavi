@@ -26,7 +26,7 @@ pipeline {
         CLUSTER_NAME = "hadoop-dataproc"
         REGION = "us-central1"
         STAGING_BUCKET = "gs://mayavi-staging-bucket"
-        SCANNER_HOME = tool 'SonarScanner'
+        // SCANNER_HOME = tool 'SonarScanner'
     }
     stages {
         stage('Print Info') {
@@ -48,15 +48,13 @@ pipeline {
 
         stage("Quality Gate") {
             steps {
-                container('sonar'){
-                    timeout(time: 10, unit: 'MINUTES') {
-                        script {
-                            def qg = waitForQualityGate()
-                            if (qg.status != 'OK') {
-                                error "Pipeline aborted due to quality gate failure: ${qg.status}"
-                            } else {
-                                echo "SonarQube analysis passed (Status: ${qg.status}), continue to run Hadoop job"
-                            }
+                timeout(time: 10, unit: 'MINUTES') {
+                    script {
+                        def qg = waitForQualityGate()
+                        if (qg.status != 'OK') {
+                            error "Pipeline aborted due to quality gate failure: ${qg.status}"
+                        } else {
+                            echo "SonarQube analysis passed (Status: ${qg.status}), continue to run Hadoop job"
                         }
                     }
                 }
@@ -66,9 +64,9 @@ pipeline {
         stage('Run Hadoop Job') {
             steps {
                 container('gcloud') {
-                withCredentials([file(credentialsId: 'gcp-key', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
-                    script {
-                        writeFile file: 'mapper.py', text: '''#!/usr/bin/env python3
+                    withCredentials([file(credentialsId: 'gcp-key', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
+                        script {
+                            writeFile file: 'mapper.py', text: '''#!/usr/bin/env python3
 import os
 import sys
 
@@ -80,7 +78,7 @@ for _ in sys.stdin:
 
 print('"{}"\t{}'.format(filename, line_count))
 '''
-                        writeFile file: 'reducer.py', text: '''#!/usr/bin/env python3
+                            writeFile file: 'reducer.py', text: '''#!/usr/bin/env python3
 import sys
 
 def safe_emit(name, count):
@@ -120,44 +118,44 @@ if __name__ == '__main__':
     except Exception:
         pass
 '''
+                        }
+
+                        sh '''
+                        gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS
+                        gcloud config set project ${PROJECT_ID}
+
+                        gsutil rm -r ${STAGING_BUCKET}/input/ || true
+                        gsutil rm -r ${STAGING_BUCKET}/output/ || true
+                        rm -rf mayavi || true
+                        git clone https://github.com/Liyixian06/mayavi.git
+                        cd mayavi
+                        gsutil -m rsync -r -x '.*\\.(jpg|jpeg|png|gif|svg|bmp|pdf|zip|bin)$|\\.git.*' . ${STAGING_BUCKET}/input/
+                        
+                        cd ../
+                        ls -l mapper.py reducer.py
+                        cat mapper.py
+                        sed -i 's/\r$//' mapper.py reducer.py
+                        chmod +x mapper.py reducer.py
+                        gsutil cp mapper.py reducer.py ${STAGING_BUCKET}/streaming/
+
+                        gcloud dataproc jobs submit hadoop \
+                        --cluster=${CLUSTER_NAME} \
+                        --region=${REGION} \
+                        --project=${PROJECT_ID} \
+                        --class=org.apache.hadoop.streaming.HadoopStreaming \
+                        --jars=file:///usr/lib/hadoop/hadoop-streaming.jar \
+                        --files=${STAGING_BUCKET}/streaming/mapper.py,${STAGING_BUCKET}/streaming/reducer.py \
+                        -- -D mapreduce.input.fileinputformat.input.dir.recursive=true \
+                        -D mapreduce.job.reduces=1 \
+                        -mapper "python3 mapper.py" \
+                        -reducer "python3 reducer.py" \
+                        -input ${STAGING_BUCKET}/input/* \
+                        -output ${STAGING_BUCKET}/output/
+                        
+                        gsutil cat ${STAGING_BUCKET}/output/* > merged-output
+                        cat merged-output
+                        '''
                     }
-
-                    sh '''
-                    gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS
-                    gcloud config set project ${PROJECT_ID}
-
-                    gsutil rm -r ${STAGING_BUCKET}/input/ || true
-                    gsutil rm -r ${STAGING_BUCKET}/output/ || true
-                    rm -rf mayavi || true
-                    git clone https://github.com/Liyixian06/mayavi.git
-                    cd mayavi
-                    gsutil -m rsync -r -x '.*\\.(jpg|jpeg|png|gif|svg|bmp|pdf|zip|bin)$|\\.git.*' . ${STAGING_BUCKET}/input/
-                    
-                    cd ../
-                    ls -l mapper.py reducer.py
-                    cat mapper.py
-                    sed -i 's/\r$//' mapper.py reducer.py
-                    chmod +x mapper.py reducer.py
-                    gsutil cp mapper.py reducer.py ${STAGING_BUCKET}/streaming/
-
-                    gcloud dataproc jobs submit hadoop \
-                      --cluster=${CLUSTER_NAME} \
-                      --region=${REGION} \
-                      --project=${PROJECT_ID} \
-                      --class=org.apache.hadoop.streaming.HadoopStreaming \
-                      --jars=file:///usr/lib/hadoop/hadoop-streaming.jar \
-                      --files=${STAGING_BUCKET}/streaming/mapper.py,${STAGING_BUCKET}/streaming/reducer.py \
-                      -- -D mapreduce.input.fileinputformat.input.dir.recursive=true \
-                      -D mapreduce.job.reduces=1 \
-                      -mapper "python3 mapper.py" \
-                      -reducer "python3 reducer.py" \
-                      -input ${STAGING_BUCKET}/input/* \
-                      -output ${STAGING_BUCKET}/output/
-                    
-                    gsutil cat ${STAGING_BUCKET}/output/* > merged-output
-                    cat merged-output
-                    '''
-                }
                 }
             }
         }
