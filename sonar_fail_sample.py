@@ -21,6 +21,9 @@ def swallow_all_errors():
     except:
         return None
 
+def dangerous_exec(user_input):
+    exec(user_input)
+
 if __name__ == "__main__":
     print(run_user_command("ls -la"))
     print(crash_with_none())
