@@ -67,44 +67,46 @@ pipeline {
             steps {
                 container('gcloud') {
                 withCredentials([file(credentialsId: 'gcp-key', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
+                    script {
+                        writeFile file: 'mapper.sh', text: '''
+                        #!/bin/bash
+                        FILENAME=$(basename "$map_input_file")
+                        LINE_COUNT=$(cat - | wc -l)
+                        echo -e "\\"$FILENAME\\"\\t$LINE_COUNT"
+                        '''
+                        writeFile file: 'reducer.sh', text: '''
+                        #!/bin/bash
+                        current_file=""
+                        total_lines=0
+                        while IFS=$'\\t' read -r file count; do
+                            if [ "$file" == "$current_file" ]; then
+                                total_lines=$((total_lines + count))
+                            else
+                                if [ -n "$current_file" ]; then
+                                    echo "$current_file: $total_lines"
+                                fi
+                                current_file="$file"
+                                total_lines=$count
+                            fi
+                        done
+                        if [ -n "$current_file" ]; then
+                            echo "$current_file: $total_lines"
+                        fi
+                        '''
+                    }
+
                     sh '''
                     gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS
                     gcloud config set project ${PROJECT_ID}
-                    
+
                     gsutil rm -r ${STAGING_BUCKET}/input/ || true
                     gsutil rm -r ${STAGING_BUCKET}/output/ || true
                     rm -rf mayavi || true
                     git clone https://github.com/Liyixian06/mayavi.git
                     cd mayavi
-                    gsutil -m rsync -r -x '.*\\.(jpg|jpeg|png|gif|svg|bmp|pdf|zip|bin)$|\\.git.*' . ${STAGING_BUCKET}/input/
-                    
-                    cat << 'EOF' > mapper.sh
-                    #!/bin/bash
-                    FILENAME=\$(basename "\$map_input_file")
-                    LINE_COUNT=\$(cat - | wc -l)
-                    echo -e "\\"\$FILENAME\\"\\t\$LINE_COUNT"
-                    EOF
-                    
-                    cat << 'EOF' > reducer.sh
-                    #!/bin/bash
-                    current_file=""
-                    total_lines=0
-                    while IFS=\$'\\t' read -r file count; do
-                        if [ "\$file" == "\$current_file" ]; then
-                            total_lines=\$((total_lines + count))
-                        else
-                            if [ -n "\$current_file" ]; then
-                                echo "\$current_file: \$total_lines"
-                            fi
-                            current_file="\$file"
-                            total_lines=\$count
-                        fi
-                    done
-                    if [ -n "\$current_file" ]; then
-                        echo "\$current_file: \$total_lines"
-                    fi
-                    EOF
+                    cp ../mapper.sh ../reducer.sh .
                     chmod +x mapper.sh reducer.sh
+                    gsutil -m rsync -r -x '.*\\.(jpg|jpeg|png|gif|svg|bmp|pdf|zip|bin)$|\\.git.*' . ${STAGING_BUCKET}/input/
 
                     gcloud dataproc jobs submit hadoop \
                       --cluster=${CLUSTER_NAME} \
