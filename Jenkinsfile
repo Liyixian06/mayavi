@@ -23,8 +23,8 @@ pipeline {
     }
     environment {
         PROJECT_ID = "cmu-class-485820"
-        CLUSTER_NAME = "devops-mayavi"
-        REGION = "us-central1-b"
+        CLUSTER_NAME = "hadoop-dataproc"
+        REGION = "us-central1"
         STAGING_BUCKET = "gs://mayavi-staging-bucket"
         SCANNER_HOME = tool 'SonarScanner'
     }
