@@ -99,16 +99,16 @@ pipeline {
                     gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS
                     gcloud config set project ${PROJECT_ID}
 
+                    ls -l mapper.sh reducer.sh
+                    chmod +x mapper.sh reducer.sh
+
                     gsutil rm -r ${STAGING_BUCKET}/input/ || true
                     gsutil rm -r ${STAGING_BUCKET}/output/ || true
                     rm -rf mayavi || true
                     git clone https://github.com/Liyixian06/mayavi.git
                     cd mayavi
                     gsutil -m rsync -r -x '.*\\.(jpg|jpeg|png|gif|svg|bmp|pdf|zip|bin)$|\\.git.*' . ${STAGING_BUCKET}/input/
-                    
-                    cp mapper.sh reducer.sh .
-                    ls -l mapper.sh reducer.sh
-                    chmod +x mapper.sh reducer.sh
+                    cd ../
 
                     gcloud dataproc jobs submit hadoop \
                       --cluster=${CLUSTER_NAME} \
