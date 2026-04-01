@@ -68,16 +68,16 @@ pipeline {
                 container('gcloud') {
                 withCredentials([file(credentialsId: 'gcp-key', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
                     script {
-                        writeFile file: 'mapper.sh', text: '''#!/bin/bash
+                        writeFile file: 'mapper.sh', text: '''#!/bin/sh
 FILENAME=$(basename "$map_input_file")
-LINE_COUNT=$(cat - | wc -l)
-echo -e "\\"$FILENAME\\"\\t$LINE_COUNT"
+LINE_COUNT=$(wc -l | awk '{print $1}')
+printf '"%s"\t%s\n' "$FILENAME" "$LINE_COUNT"
                         '''
-                        writeFile file: 'reducer.sh', text: '''#!/bin/bash
+                        writeFile file: 'reducer.sh', text: '''#!/bin/sh
 current_file=""
 total_lines=0
-while IFS=$'\\t' read -r file count; do
-    if [ "$file" == "$current_file" ]; then
+while IFS="$(printf '\\t')" read -r file count; do
+    if [ "$file" = "$current_file" ]; then
         total_lines=$((total_lines + count))
     else
         if [ -n "$current_file" ]; then
@@ -118,8 +118,8 @@ fi
                       --files=mapper.sh,reducer.sh \
                       -- -D mapreduce.input.fileinputformat.input.dir.recursive=true \
                       -D mapreduce.job.reduces=1 \
-                      -mapper "bash mapper.sh" \
-                      -reducer "bash reducer.sh" \
+                                            -mapper "/bin/sh mapper.sh" \
+                                            -reducer "/bin/sh reducer.sh" \
                       -input ${STAGING_BUCKET}/input/* \
                       -output ${STAGING_BUCKET}/output/
                     '''
