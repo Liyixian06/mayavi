@@ -72,7 +72,8 @@ pipeline {
 INPUT_FILE="${map_input_file:-${mapreduce_map_input_file:-unknown}}"
 FILENAME="${INPUT_FILE##*/}"
 LINE_COUNT=$(awk 'END{print NR+0}')
-printf '"%s"\t%s\n' "$FILENAME" "$LINE_COUNT"
+[ -n "$LINE_COUNT" ] || LINE_COUNT=0
+echo "\"$FILENAME\"\t$LINE_COUNT"
                         '''
                         writeFile file: 'reducer.sh', text: '''#!/bin/sh
 current_file=""
