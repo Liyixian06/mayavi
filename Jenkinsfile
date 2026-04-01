@@ -68,30 +68,28 @@ pipeline {
                 container('gcloud') {
                 withCredentials([file(credentialsId: 'gcp-key', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
                     script {
-                        writeFile file: 'mapper.sh', text: '''
-                        #!/bin/bash
-                        FILENAME=$(basename "$map_input_file")
-                        LINE_COUNT=$(cat - | wc -l)
-                        echo -e "\\"$FILENAME\\"\\t$LINE_COUNT"
+                        writeFile file: 'mapper.sh', text: '''#!/bin/bash
+FILENAME=$(basename "$map_input_file")
+LINE_COUNT=$(cat - | wc -l)
+echo -e "\\"$FILENAME\\"\\t$LINE_COUNT"
                         '''
-                        writeFile file: 'reducer.sh', text: '''
-                        #!/bin/bash
-                        current_file=""
-                        total_lines=0
-                        while IFS=$'\\t' read -r file count; do
-                            if [ "$file" == "$current_file" ]; then
-                                total_lines=$((total_lines + count))
-                            else
-                                if [ -n "$current_file" ]; then
-                                    echo "$current_file: $total_lines"
-                                fi
-                                current_file="$file"
-                                total_lines=$count
-                            fi
-                        done
-                        if [ -n "$current_file" ]; then
-                            echo "$current_file: $total_lines"
-                        fi
+                        writeFile file: 'reducer.sh', text: '''#!/bin/bash
+current_file=""
+total_lines=0
+while IFS=$'\\t' read -r file count; do
+    if [ "$file" == "$current_file" ]; then
+        total_lines=$((total_lines + count))
+    else
+        if [ -n "$current_file" ]; then
+            echo "$current_file: $total_lines"
+        fi
+        current_file="$file"
+        total_lines=$count
+    fi
+done
+if [ -n "$current_file" ]; then
+    echo "$current_file: $total_lines"
+fi
                         '''
                     }
 
@@ -99,16 +97,17 @@ pipeline {
                     gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS
                     gcloud config set project ${PROJECT_ID}
 
-                    ls -l mapper.sh reducer.sh
-                    chmod +x mapper.sh reducer.sh
-
                     gsutil rm -r ${STAGING_BUCKET}/input/ || true
                     gsutil rm -r ${STAGING_BUCKET}/output/ || true
                     rm -rf mayavi || true
                     git clone https://github.com/Liyixian06/mayavi.git
                     cd mayavi
                     gsutil -m rsync -r -x '.*\\.(jpg|jpeg|png|gif|svg|bmp|pdf|zip|bin)$|\\.git.*' . ${STAGING_BUCKET}/input/
+                    
                     cd ../
+                    ls -l mapper.sh reducer.sh
+                    sed -i 's/\r$//' mapper.sh reducer.sh
+                    chmod +x mapper.sh reducer.sh
 
                     gcloud dataproc jobs submit hadoop \
                       --cluster=${CLUSTER_NAME} \
@@ -119,8 +118,8 @@ pipeline {
                       --files=mapper.sh,reducer.sh \
                       -- -D mapreduce.input.fileinputformat.input.dir.recursive=true \
                       -D mapreduce.job.reduces=1 \
-                      -mapper mapper.sh \
-                      -reducer reducer.sh \
+                      -mapper "bash mapper.sh" \
+                      -reducer "bash reducer.sh" \
                       -input ${STAGING_BUCKET}/input/* \
                       -output ${STAGING_BUCKET}/output/
                     '''
