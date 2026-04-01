@@ -68,7 +68,7 @@ pipeline {
                 container('gcloud') {
                 withCredentials([file(credentialsId: 'gcp-key', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
                     script {
-                        writeFile file: 'mapper.py', text: '''#!/usr/bin/env python
+                        writeFile file: 'mapper.py', text: '''#!/usr/bin/env python3
 import os
 import sys
 
@@ -78,14 +78,14 @@ line_count = 0
 for _ in sys.stdin:
     line_count += 1
 
-sys.stdout.write('"{}"\t{}\n'.format(filename, line_count))
+print('"{}"\t{}'.format(filename, line_count))
 '''
-                        writeFile file: 'reducer.py', text: '''#!/usr/bin/env python
+                        writeFile file: 'reducer.py', text: '''#!/usr/bin/env python3
 import sys
 
 def safe_emit(name, count):
     if name is not None:
-        sys.stdout.write('{}: {}\n'.format(name, count))
+        print('{}: {}'.format(name, count))
 
 def main():
     current_file = None
@@ -93,10 +93,10 @@ def main():
 
     for raw in sys.stdin:
         try:
-            line = raw.rstrip('\n')
+            line = raw.rstrip()
             if not line:
                 continue
-            parts = line.split('\t', 1)
+            parts = line.split(chr(9), 1)
             if len(parts) != 2:
                 continue
 
@@ -149,8 +149,8 @@ if __name__ == '__main__':
                       --files=${STAGING_BUCKET}/streaming/mapper.py,${STAGING_BUCKET}/streaming/reducer.py \
                       -- -D mapreduce.input.fileinputformat.input.dir.recursive=true \
                       -D mapreduce.job.reduces=1 \
-                      -mapper "python mapper.py" \
-                      -reducer "python reducer.py" \
+                      -mapper "python3 mapper.py" \
+                      -reducer "python3 reducer.py" \
                       -input ${STAGING_BUCKET}/input/* \
                       -output ${STAGING_BUCKET}/output/
                     
