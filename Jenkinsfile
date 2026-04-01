@@ -68,31 +68,48 @@ pipeline {
                 container('gcloud') {
                 withCredentials([file(credentialsId: 'gcp-key', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
                     script {
-                        writeFile file: 'mapper.sh', text: '''#!/bin/sh
-INPUT_FILE="${map_input_file:-${mapreduce_map_input_file:-unknown}}"
-FILENAME="${INPUT_FILE##*/}"
-LINE_COUNT=$(awk 'END{print NR+0}')
-[ -n "$LINE_COUNT" ] || LINE_COUNT=0
-echo "\"$FILENAME\"\t$LINE_COUNT"
-                        '''
-                        writeFile file: 'reducer.sh', text: '''#!/bin/sh
-current_file=""
-total_lines=0
-while IFS="$(printf '\\t')" read -r file count; do
-    if [ "$file" = "$current_file" ]; then
-        total_lines=$((total_lines + count))
-    else
-        if [ -n "$current_file" ]; then
-            echo "$current_file: $total_lines"
-        fi
-        current_file="$file"
-        total_lines=$count
-    fi
-done
-if [ -n "$current_file" ]; then
-    echo "$current_file: $total_lines"
-fi
-                        '''
+                        writeFile file: 'mapper.py', text: '''#!/usr/bin/env python3
+import os
+import sys
+
+input_file = os.environ.get("map_input_file") or os.environ.get("mapreduce_map_input_file") or "unknown"
+filename = os.path.basename(input_file)
+line_count = 0
+for _ in sys.stdin:
+    line_count += 1
+
+print(f'"{filename}"\t{line_count}')
+'''
+                        writeFile file: 'reducer.py', text: '''#!/usr/bin/env python3
+import sys
+
+current_file = None
+total_lines = 0
+
+for line in sys.stdin:
+    line = line.rstrip("\n")
+    if not line:
+        continue
+    parts = line.split("\t", 1)
+    if len(parts) != 2:
+        continue
+    file_name, count_str = parts
+    try:
+        count = int(count_str)
+    except ValueError:
+        continue
+
+    if file_name == current_file:
+        total_lines += count
+    else:
+        if current_file is not None:
+            print(f"{current_file}: {total_lines}")
+        current_file = file_name
+        total_lines = count
+
+if current_file is not None:
+    print(f"{current_file}: {total_lines}")
+'''
                     }
 
                     sh '''
@@ -107,10 +124,10 @@ fi
                     gsutil -m rsync -r -x '.*\\.(jpg|jpeg|png|gif|svg|bmp|pdf|zip|bin)$|\\.git.*' . ${STAGING_BUCKET}/input/
                     
                     cd ../
-                    ls -l mapper.sh reducer.sh
-                    cat mapper.sh
-                    sed -i 's/\r$//' mapper.sh reducer.sh
-                    chmod +x mapper.sh reducer.sh
+                    ls -l mapper.py reducer.py
+                    cat mapper.py
+                    sed -i 's/\r$//' mapper.py reducer.py
+                    chmod +x mapper.py reducer.py
 
                     gcloud dataproc jobs submit hadoop \
                       --cluster=${CLUSTER_NAME} \
@@ -118,11 +135,11 @@ fi
                       --project=${PROJECT_ID} \
                       --class=org.apache.hadoop.streaming.HadoopStreaming \
                       --jars=file:///usr/lib/hadoop/hadoop-streaming.jar \
-                      --files=mapper.sh,reducer.sh \
+                                            --files=mapper.py,reducer.py \
                       -- -D mapreduce.input.fileinputformat.input.dir.recursive=true \
                       -D mapreduce.job.reduces=1 \
-                      -mapper "sh ./mapper.sh" \
-                      -reducer "sh ./reducer.sh" \
+                                            -mapper "python3 mapper.py" \
+                                            -reducer "python3 reducer.py" \
                       -input ${STAGING_BUCKET}/input/* \
                       -output ${STAGING_BUCKET}/output/
                     '''
