@@ -128,6 +128,7 @@ if current_file is not None:
                     cat mapper.py
                     sed -i 's/\r$//' mapper.py reducer.py
                     chmod +x mapper.py reducer.py
+                    gsutil cp mapper.py reducer.py ${STAGING_BUCKET}/streaming/
 
                     gcloud dataproc jobs submit hadoop \
                       --cluster=${CLUSTER_NAME} \
@@ -135,11 +136,11 @@ if current_file is not None:
                       --project=${PROJECT_ID} \
                       --class=org.apache.hadoop.streaming.HadoopStreaming \
                       --jars=file:///usr/lib/hadoop/hadoop-streaming.jar \
-                                            --files=mapper.py,reducer.py \
+                      --files=${STAGING_BUCKET}/streaming/mapper.py,${STAGING_BUCKET}/streaming/reducer.py \
                       -- -D mapreduce.input.fileinputformat.input.dir.recursive=true \
                       -D mapreduce.job.reduces=1 \
-                                            -mapper "python3 mapper.py" \
-                                            -reducer "python3 reducer.py" \
+                      -mapper "python mapper.py" \
+                      -reducer "python reducer.py" \
                       -input ${STAGING_BUCKET}/input/* \
                       -output ${STAGING_BUCKET}/output/
                     '''
