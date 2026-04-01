@@ -68,7 +68,7 @@ pipeline {
                 container('gcloud') {
                 withCredentials([file(credentialsId: 'gcp-key', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
                     script {
-                        writeFile file: 'mapper.py', text: '''#!/usr/bin/env python3
+                        writeFile file: 'mapper.py', text: '''#!/usr/bin/env python
 import os
 import sys
 
@@ -78,37 +78,47 @@ line_count = 0
 for _ in sys.stdin:
     line_count += 1
 
-print(f'"{filename}"\t{line_count}')
+sys.stdout.write('"{}"\t{}\n'.format(filename, line_count))
 '''
-                        writeFile file: 'reducer.py', text: '''#!/usr/bin/env python3
+                        writeFile file: 'reducer.py', text: '''#!/usr/bin/env python
 import sys
 
-current_file = None
-total_lines = 0
+def safe_emit(name, count):
+    if name is not None:
+        sys.stdout.write('{}: {}\n'.format(name, count))
 
-for line in sys.stdin:
-    line = line.rstrip("\n")
-    if not line:
-        continue
-    parts = line.split("\t", 1)
-    if len(parts) != 2:
-        continue
-    file_name, count_str = parts
+def main():
+    current_file = None
+    total_lines = 0
+
+    for raw in sys.stdin:
+        try:
+            line = raw.rstrip('\n')
+            if not line:
+                continue
+            parts = line.split('\t', 1)
+            if len(parts) != 2:
+                continue
+
+            file_name, count_str = parts[0], parts[1].strip()
+            count = int(count_str)
+
+            if file_name == current_file:
+                total_lines += count
+            else:
+                safe_emit(current_file, total_lines)
+                current_file = file_name
+                total_lines = count
+        except Exception:
+            continue
+
+    safe_emit(current_file, total_lines)
+
+if __name__ == '__main__':
     try:
-        count = int(count_str)
-    except ValueError:
-        continue
-
-    if file_name == current_file:
-        total_lines += count
-    else:
-        if current_file is not None:
-            print(f"{current_file}: {total_lines}")
-        current_file = file_name
-        total_lines = count
-
-if current_file is not None:
-    print(f"{current_file}: {total_lines}")
+        main()
+    except Exception:
+        pass
 '''
                     }
 
@@ -143,6 +153,9 @@ if current_file is not None:
                       -reducer "python reducer.py" \
                       -input ${STAGING_BUCKET}/input/* \
                       -output ${STAGING_BUCKET}/output/
+                    
+                    gsutil cat ${STAGING_BUCKET}/output/* > merged-output
+                    cat merged-output
                     '''
                 }
                 }
