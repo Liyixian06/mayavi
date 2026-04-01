@@ -103,8 +103,8 @@ pipeline {
                     gsutil rm -r ${STAGING_BUCKET}/output/ || true
                     rm -rf mayavi || true
                     git clone https://github.com/Liyixian06/mayavi.git
+                    cp mapper.sh reducer.sh mayavi/
                     cd mayavi
-                    cp ../mapper.sh ../reducer.sh .
                     chmod +x mapper.sh reducer.sh
                     gsutil -m rsync -r -x '.*\\.(jpg|jpeg|png|gif|svg|bmp|pdf|zip|bin)$|\\.git.*' . ${STAGING_BUCKET}/input/
 
@@ -114,7 +114,7 @@ pipeline {
                       --project=${PROJECT_ID} \
                       --class=org.apache.hadoop.streaming.HadoopStreaming \
                       --jars=file:///usr/lib/hadoop/hadoop-streaming.jar \
-                      --files mapper.sh,reducer.sh \
+                      --files=mapper.sh#mapper.sh,reducer.sh#reducer.sh \
                       -- -D mapreduce.input.fileinputformat.input.dir.recursive=true \
                       -D mapreduce.job.reduces=1 \
                       -mapper mapper.sh \
