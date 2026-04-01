@@ -66,8 +66,11 @@ pipeline {
         stage('Run Hadoop Job') {
             steps {
                 container('gcloud') {
-                script {
+                withCredentials([file(credentialsId: 'gcp-key', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
                     sh '''
+                    gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS
+                    gcloud config set project ${PROJECT_ID}
+                    
                     gsutil rm -r ${STAGING_BUCKET}/input/ || true
                     gsutil rm -r ${STAGING_BUCKET}/output/ || true
                     rm -rf mayavi || true
