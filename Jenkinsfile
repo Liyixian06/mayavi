@@ -2,20 +2,28 @@ pipeline {
     agent {
         kubernetes {
             defaultContainer 'gcloud'
-            yaml """
-            apiVersion: v1
-            kind: Pod
-            spec:
-              containers:
-                - name: gcloud
-                  image: google/cloud-sdk:slim
-                  command: ['cat']
-                  tty: true
-                - name: sonar
-                  image: sonarsource/sonar-scanner-cli:latest
-                  command: ['cat']
-                  tty: true
-            """
+                        yaml """
+apiVersion: v1
+kind: Pod
+spec:
+    containers:
+        - name: gcloud
+            image: google/cloud-sdk:slim
+            command: ['cat']
+            tty: true
+            volumeMounts:
+                - name: gcp-key
+                    mountPath: /var/jenkins-secrets/gcp
+                    readOnly: true
+        - name: sonar
+            image: sonarsource/sonar-scanner-cli:latest
+            command: ['cat']
+            tty: true
+    volumes:
+        - name: gcp-key
+            secret:
+                secretName: jenkins-gcp-key
+                        """
         }
     }
     triggers {
@@ -47,12 +55,14 @@ pipeline {
         }
 
         stage("Quality Gate") {
+            agent none
             steps {
                 timeout(time: 10, unit: 'MINUTES') {
                     script {
                         def qg = waitForQualityGate()
-                        if (qg.status != 'OK') {
-                            error "Pipeline aborted due to quality gate failure: ${qg.status}"
+                        def gateStatus = params.FORCE_QUALITY_GATE_FAIL ? 'FORCED_FAIL' : qg.status
+                        if (gateStatus != 'OK') {
+                            error "Pipeline aborted due to quality gate failure: ${gateStatus}"
                         } else {
                             echo "SonarQube analysis passed (Status: ${qg.status}), continue to run Hadoop job"
                         }
@@ -64,9 +74,8 @@ pipeline {
         stage('Run Hadoop Job') {
             steps {
                 container('gcloud') {
-                    withCredentials([file(credentialsId: 'gcp-key', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
-                        script {
-                            writeFile file: 'mapper.py', text: '''#!/usr/bin/env python3
+                    script {
+                        writeFile file: 'mapper.py', text: '''#!/usr/bin/env python3
 import os
 import sys
 
@@ -118,10 +127,14 @@ if __name__ == '__main__':
     except Exception:
         pass
 '''
-                        }
+                    }
 
-                        sh '''
-                        gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS
+                    sh '''
+                        KEY_FILE=/var/jenkins-secrets/gcp/gcp-key.json
+                        test -s "$KEY_FILE"
+                        head -c 1 "$KEY_FILE" | grep -q '{'
+
+                        gcloud auth activate-service-account --key-file="$KEY_FILE"
                         gcloud config set project ${PROJECT_ID}
 
                         gsutil rm -r ${STAGING_BUCKET}/input/ || true
@@ -154,8 +167,7 @@ if __name__ == '__main__':
                         
                         gsutil cat ${STAGING_BUCKET}/output/* > merged-output
                         cat merged-output
-                        '''
-                    }
+                    '''
                 }
             }
         }
