@@ -6,23 +6,23 @@ pipeline {
             apiVersion: v1
             kind: Pod
             spec:
-                containers:
-                    - name: gcloud
-                        image: google/cloud-sdk:slim
-                        command: ['cat']
-                        tty: true
-                        volumeMounts:
-                            - name: gcp-key
-                                mountPath: /var/jenkins-secrets/gcp
-                                readOnly: true
-                    - name: sonar
-                        image: sonarsource/sonar-scanner-cli:latest
-                        command: ['cat']
-                        tty: true
-                volumes:
+              containers:
+                - name: gcloud
+                  image: google/cloud-sdk:slim
+                  command: ['cat']
+                  tty: true
+                  volumeMounts:
                     - name: gcp-key
-                        secret:
-                            secretName: jenkins-gcp-key
+                      mountPath: /var/jenkins-secrets/gcp
+                      readOnly: true
+                - name: sonar
+                  image: sonarsource/sonar-scanner-cli:latest
+                  command: ['cat']
+                  tty: true
+              volumes:
+                - name: gcp-key
+                  secret:
+                    secretName: jenkins-gcp-key
             """
         }
     }
